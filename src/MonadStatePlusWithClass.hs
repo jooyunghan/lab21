@@ -2,7 +2,11 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses  #-}
 -- {-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module MonadStatePlusWithClass  where
+module MonadStatePlusWithClass(
+                                StateMonadPlus
+                              , runStateP
+                              , showD
+                              ,) where
 
 import Control.Monad.State
 import qualified Data.Map.Lazy as M
@@ -75,14 +79,10 @@ stateMP :: forall s a. (Trace -> s -> ((a, Trace),s)) -> StateMonadPlus s a
 stateMP  f = StateMonadPlus $  StateT $ \trace -> 
                state $ f trace   :: State s (a,Trace)
                                     
--- this would be too rigid, we can only build s-constant value
--- stateMP :: (Trace -> (a, Trace)) -> StateMonadPlus s a
--- stateMP  f = StateMonadPlus $  StateT $ \trace -> do
---                let (a, trace') = f trace
---                let r = state (\s -> ((a,trace'), s))
---                undefined :: State s (a,Trace)
-runMP ::  forall s a.  StateMonadPlus s a -> Trace -> State s (a,Trace)
-runMP m   = runStateT (unwrap m) 
+-- pretty useless function....
+-- except that it hides that we are using StateT inside
+runStateP ::  forall s a.  StateMonadPlus s a -> s  -> ((a,Trace),s)
+runStateP m   = runState $ runStateT (unwrap m) M.empty
 
 instance Monad (StateMonadPlus s) where
     return :: forall a. a -> StateMonadPlus s a
@@ -93,31 +93,21 @@ instance Monad (StateMonadPlus s) where
     (>>=) :: forall a b. StateMonadPlus s a -> (a -> StateMonadPlus s b) -> StateMonadPlus s b
     m >>= f  = StateMonadPlus $  StateT $ \trace -> do -- we run in the (State s) monad now
                                      let trace' = inc trace strBind
-                                     -- so we can bind without referring to the ultimate s which wil be used
                                      (a,trace'') <- runStateT (unwrap m) trace' :: State s (a,Trace)
-                                     -- we get the next action from the previous a 
                                      let step  = f a :: StateMonadPlus s b
-                                     -- now we need to run to get its log (still in State s monad, no need to go lower)
                                      (b, trace''') <-  runStateT (unwrap step) trace'' :: State s (b,Trace)
-                                     -- note that we have to pass trace' as argument as if our computation depended
-                                     -- on it, because we chose a too general monad, namely StateT, when only WriterT
-                                     -- was necessary since our 'log' has no influence on the results
                                      return (b,  trace''' ) :: State s (b,Trace)
-    -- desugared
-other :: forall s a b. StateMonadPlus s a -> (a -> StateMonadPlus s b) -> StateMonadPlus s b
-m `other`  f  =  StateMonadPlus $  StateT $ \trace ->
-                    let trace' = inc trace strBind
-                    in runStateT (unwrap     m) trace'  >>= \(a,trace'') -> 
-                       runStateT (unwrap (f a)) trace'' >>= \(b, trace''') ->
-                       return (b, trace''')
-
--- automatically an instance of MonadState                           
--- instance MonadState s (StateMonadPlus s) where ..
-
--- but we can override this so that our mechaninc  transparent to users writing 
+-- automatically an instance of MonadState,                           
+-- but we want to override that to expose the innner (not outer) state.
+-- that makes it transparent for user to interpret a (StateMonadPlus s) in the State s monad, without log
+-- or in the (StateMonadPlus s) monad, with log
 instance MonadState s (StateMonadPlus s) where
-    get = undefined
-    put = undefined
+     get = (StateMonadPlus $  StateT $ \trace -> do -- in (State s) now
+                                         (a :: s ) <- (get :: State s s)
+                                         return (a,trace) :: State s (s,Trace)) :: StateMonadPlus s s
+     put s  = StateMonadPlus $  StateT $ \trace -> do
+                                           put s
+                                           return ((),trace)
 
 exemple1 :: StateMonadPlus s String
 exemple1 =
@@ -128,6 +118,7 @@ exemple1 =
 exemple2 :: StateMonadPlus s String
 exemple2 = do _ <- annotate "A" (return  (3::Int) >>return (4::Int))
               _ <- return  (5::Int)
+              a <- get
               diagnostics
 
 exemple3 :: (MonadState s m) => m ()
@@ -139,9 +130,9 @@ exemple3 =
 main :: IO ()
 main =
     do
-      let (a,_) = evalState  (runMP exemple1 M.empty)  (0::Integer)
+      let (a,_) = evalState  (runStateT (unwrap exemple1) M.empty)  (0::Integer)
       print a 
-      let (_,s) = evalState  (runMP exemple3 M.empty)  (0::Integer)
+      let (_,s) = evalState  (runStateT (unwrap exemple3) M.empty)  (0::Integer)
       print(showD s) 
                   
       --putStrLn "hi"

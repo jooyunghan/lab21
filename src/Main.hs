@@ -2,7 +2,7 @@
 module Main where
 
 import Control.Monad.State
-import qualified Data.Map.Lazy as M
+--import qualified Data.Map.Lazy as M
 import qualified MonadStatePlusWithClass as V2
 
 data Trace = Trace { bindCount :: Int , displayCount :: Int , returnCount :: Int }    
@@ -52,20 +52,19 @@ exemple1 = do _<- return (3::Int)  >> return (4::Int)
               diagnostics
 
 
-exemple3 :: (MonadState s m) => m ()
+exemple3 :: (MonadState s m) => m String
 exemple3 =
     do _ <- return (3::Int)  >> return (4::Int)
        _ <- return (5::Int)
-       return ()
+       _ <- get
+       return "hi"
             
 main :: IO ()
 main =
     do
       let (_,t) = runStateMP  exemple3 ("",(0,0,0))
       putStrLn ("first version : " ++ show t )
-      -- we can see everything if I dont restrict the exported functions
-      -- from MonadStatePlusWithClass
-      let (a,s) =  evalState  (V2.runMP exemple3 M.empty)  (0::Integer)
-      putStrLn ("second version : " ++ show s )
-      
-  
+      let (a,is) =  runState  exemple3   (0::Integer)
+      putStrLn ("second version in state monad : result " ++ show a ++ ", state :" ++ show is )
+      let ((a,t),is) =  V2.runStateP  exemple3   (0::Integer)
+      putStrLn ("second version in stateP monad: result " ++ show a ++ ", state :" ++ show is ++ ", log :" ++ V2.showD  t )
