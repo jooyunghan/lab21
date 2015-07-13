@@ -23,9 +23,9 @@ executable exercices
   -- other-modules:       
   -- other-extensions:    
   build-depends:         base >=4.7
+                       , containers
                        , flow ==1.*
                        , mtl
-                       , containers
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
@@ -36,7 +36,7 @@ Test-Suite test-exercices
     hs-source-dirs: test
     ghc-options:      -Wall  
     build-depends:   base
-                   , hspec
                    , exercices
+                   , hspec
 
                                

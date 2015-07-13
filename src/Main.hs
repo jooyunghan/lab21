@@ -24,7 +24,15 @@ exemple3 =
        _ <- return (5::Int)
        _ <- get
        return "hi"
-            
+              
+exemple4 :: (MonadState s m) => m String
+exemple4 =
+    do _ <- return (3::Int)  >> return (4::Int)
+       _ <- return (5::Int)
+       _ <- get
+       _<- fail "I am a total failure"
+       return "hi"
+              
 main :: IO ()
 main =
     do
