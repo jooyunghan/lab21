@@ -1,0 +1,7 @@
+flags: 
+  lab21:
+    no-warn-unused-do-bind: true
+packages:
+- '.'
+extra-deps: []
+resolver: nightly-2015-07-12
